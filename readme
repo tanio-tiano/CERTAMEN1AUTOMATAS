@@ -1,0 +1,4 @@
+Para ejecutar el programa hay que utilizar "make" en la consola. Por otra parte 
+ * make clean
+ * make
+ * ./intento
