@@ -16,6 +16,8 @@ NUM         {DIGIT}+(\.{DIGIT}+)?([eE][-+]?{DIGIT}+)?
 "CONECTAR"          { return CONECTAR; }
 "SIMULAR"           { return SIMULAR; }
 "AVANZAR"           { return AVANZAR; }
+"CONECTAR_CELDAS_BORDE"    { return CONECTAR_CELDAS_BORDE; }
+"IMPRIMIR_CELDAS_BORDE"   { return IMPRIMIR_CELDAS_BORDE; }
 
 ";"                 { return PUNTOCOMA; }
 

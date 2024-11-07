@@ -9,11 +9,15 @@ void yyerror(const char *s);
 #define MAX_AUTOMATAS 10  // Número máximo de autómatas que se pueden crear
 
 typedef struct EstadoCelda {
+    int fila;
+    int columna;
     int susceptibles;
     int infectados;
     int recuperados;
     int fallecidos;
     int vacunados;
+    struct EstadoCelda **vecinos; // Lista de punteros a celdas vecinas
+    int num_vecinos;              // Número de vecinos
 } EstadoCelda;
 
 typedef struct Automata {
@@ -29,10 +33,16 @@ int next_id = 1;
 
 void inicializar_automata();
 void imprimir_automata(int id);
+void conectar_celdas_borde(int id1, int fila1, int columna1, int id2, int fila2, int columna2);
+Automata* obtener_automata_por_id(int id);
+void agregar_vecino(EstadoCelda *celda, EstadoCelda *vecino);
+void imprimir_celdas_borde(Automata *automata);
+int es_celda_borde(Automata *automata, int fila, int columna);
+
 
 %}
 
-%token NUM INICIALIZAR IMPRIMIR_AUTOMATA OTHER PUNTOCOMA CONECTAR SIMULAR AVANZAR 
+%token NUM INICIALIZAR IMPRIMIR_AUTOMATA OTHER PUNTOCOMA CONECTAR SIMULAR AVANZAR CONECTAR_CELDAS_BORDE IMPRIMIR_CELDAS_BORDE
 
 %%
 program:
@@ -58,11 +68,21 @@ statement:
     | IMPRIMIR_AUTOMATA NUM PUNTOCOMA {
         imprimir_automata($2);
     }
+    | CONECTAR_CELDAS_BORDE NUM NUM NUM NUM NUM NUM PUNTOCOMA{ 
+        conectar_celdas_borde($2, $3,$4, $5,$6, $7);   
+    }
+    | IMPRIMIR_CELDAS_BORDE NUM PUNTOCOMA {
+    Automata *automata = obtener_automata_por_id($2);  // Convierte el ID en un puntero al autómata
+    if (automata != NULL) {
+        imprimir_celdas_borde(automata);
+    } else {
+        printf("Error: autómata con ID %d no encontrado.\n", $2);
+    }
+}
+
     ;
 
 %%
-
-
 
 void yyerror(const char *s) {
     fprintf(stderr, "Error: %s\n", s);
@@ -109,21 +129,22 @@ void imprimir_automata(int id) {
     printf("\nAutómata ID %d:\n", automata->id);
 
     // Encabezado de columnas
+    
     printf("        ");
     for (int j = 0; j < automata->columnas; j++) {
-        printf("    Col %d           ", j);
+        printf("    Col %d              ", j);
     }
     printf("\n");
 
     // Separador superior de la tabla
     printf("        ");
     for (int j = 0; j < automata->columnas; j++) {
-        printf("───────────────");
+        printf("────────────────────────");
     }
     printf("\n");
 
     // Imprimir cada fila de la matriz con los valores de cada celda
-    for (int i = 1; i < automata->filas; i++) {
+    for (int i = 0; i < automata->filas; i++) {
         printf("Fila %d │", i);
         for (int j = 0; j < automata->columnas; j++) {
             EstadoCelda celda = automata->matriz[i][j];
@@ -139,11 +160,80 @@ void imprimir_automata(int id) {
         // Separador entre filas
         printf("        ");
         for (int j = 0; j < automata->columnas; j++) {
-            printf("───────────────");
+             printf("────────────────────────");
         }
         printf("\n");
     }
 }
+
+
+void conectar_celdas_borde(int id1, int fila1, int columna1, int id2, int fila2, int columna2) {
+    // Obtiene los punteros a los autómatas usando sus IDs
+    Automata *automata1 = obtener_automata_por_id(id1);
+    Automata *automata2 = obtener_automata_por_id(id2);
+
+    // Verifica si ambos autómatas existen
+    if (!automata1 || !automata2) {
+        printf("Error: Uno o ambos autómatas no existen.\n");
+        return;
+    }
+
+    // Obtiene las celdas específicas en los autómatas
+    EstadoCelda *celda1 = &automata1->matriz[fila1][columna1];
+    EstadoCelda *celda2 = &automata2->matriz[fila2][columna2];
+
+    // Conecta las celdas añadiéndose mutuamente como vecinas
+    agregar_vecino(celda1, celda2);
+    agregar_vecino(celda2, celda1);
+
+    printf("Celda (%d, %d) de Autómata %d conectada con Celda (%d, %d) de Autómata %d.\n",
+           fila1, columna1, id1, fila2, columna2, id2);
+}
+
+
+void agregar_vecino(EstadoCelda *celda, EstadoCelda *vecino) {
+    // Aumenta el espacio de vecinos si es necesario
+    celda->vecinos = realloc(celda->vecinos, (celda->num_vecinos + 1) * sizeof(EstadoCelda *));
+    if (celda->vecinos == NULL) {
+        printf("Error: No se pudo asignar memoria para los vecinos.\n");
+        return;
+    }
+
+    // Añade el nuevo vecino
+    celda->vecinos[celda->num_vecinos] = vecino;
+    celda->num_vecinos++;
+}
+
+
+
+Automata* obtener_automata_por_id(int id) {
+    for (int i = 0; i < num_automatas; i++) {
+        if (automatas[i]->id == id) {
+            return automatas[i];
+        }
+    }
+    return NULL; // Devuelve NULL si no se encuentra el autómata
+}
+
+
+
+int es_celda_borde(Automata *automata, int fila, int columna) {
+    // Verifica si la celda está en el borde de la matriz
+    return (fila == 0 || fila == automata->filas - 1 || 
+            columna == 0 || columna == automata->columnas - 1);
+}
+
+void imprimir_celdas_borde(Automata *automata) {
+    printf("Celdas de borde en el autómata ID %d:\n", automata->id);
+    for (int i = 0; i < automata->filas; i++) {
+        for (int j = 0; j < automata->columnas; j++) {
+            if (es_celda_borde(automata, i, j)) {
+                printf("Celda de borde en (%d, %d)\n", i, j);
+            }
+        }
+    }
+}
+
 
 int main() {
     // Abre el archivo para escribir los comandos
