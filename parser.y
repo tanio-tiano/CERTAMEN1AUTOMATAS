@@ -25,6 +25,8 @@ typedef struct Automata {
     EstadoCelda **matriz;
     int filas;
     int columnas;
+    struct Automata **vecinos;  // Lista de punteros a autómatas vecinos
+    int num_vecinos;
 } Automata;
 
 Automata *automatas[MAX_AUTOMATAS];
@@ -38,7 +40,7 @@ Automata* obtener_automata_por_id(int id);
 void agregar_vecino(EstadoCelda *celda, EstadoCelda *vecino);
 void imprimir_celdas_borde(Automata *automata);
 int es_celda_borde(Automata *automata, int fila, int columna);
-
+void agregar_vecino_automata(Automata *automata, Automata *vecino);
 
 %}
 
@@ -126,7 +128,7 @@ void imprimir_automata(int id) {
         return;
     }
 
-    printf("\nAutómata ID %d:\n", automata->id);
+    printf("\nAutómata ID %d: Vecinos de automata %d\n", automata->id, automata->num_vecinos);
 
     // Encabezado de columnas
     
@@ -166,7 +168,6 @@ void imprimir_automata(int id) {
     }
 }
 
-
 void conectar_celdas_borde(int id1, int fila1, int columna1, int id2, int fila2, int columna2) {
     // Obtiene los punteros a los autómatas usando sus IDs
     Automata *automata1 = obtener_automata_por_id(id1);
@@ -178,6 +179,13 @@ void conectar_celdas_borde(int id1, int fila1, int columna1, int id2, int fila2,
         return;
     }
 
+    // Verifica que las coordenadas estén dentro de los límites de cada autómata
+    if (fila1 < 0 || fila1 >= automata1->filas || columna1 < 0 || columna1 >= automata1->columnas ||
+        fila2 < 0 || fila2 >= automata2->filas || columna2 < 0 || columna2 >= automata2->columnas) {
+        printf("Error: Coordenadas fuera de los límites del autómata.\n");
+        return;
+    }
+
     // Obtiene las celdas específicas en los autómatas
     EstadoCelda *celda1 = &automata1->matriz[fila1][columna1];
     EstadoCelda *celda2 = &automata2->matriz[fila2][columna2];
@@ -186,9 +194,14 @@ void conectar_celdas_borde(int id1, int fila1, int columna1, int id2, int fila2,
     agregar_vecino(celda1, celda2);
     agregar_vecino(celda2, celda1);
 
+    // Agrega los autómatas como vecinos entre sí (solo si aún no son vecinos)
+    agregar_vecino_automata(automata1, automata2);
+    agregar_vecino_automata(automata2, automata1);
+
     printf("Celda (%d, %d) de Autómata %d conectada con Celda (%d, %d) de Autómata %d.\n",
            fila1, columna1, id1, fila2, columna2, id2);
 }
+
 
 
 void agregar_vecino(EstadoCelda *celda, EstadoCelda *vecino) {
@@ -202,6 +215,26 @@ void agregar_vecino(EstadoCelda *celda, EstadoCelda *vecino) {
     // Añade el nuevo vecino
     celda->vecinos[celda->num_vecinos] = vecino;
     celda->num_vecinos++;
+}
+
+void agregar_vecino_automata(Automata *automata, Automata *vecino) {
+    // Verifica si el vecino ya está en la lista
+    for (int i = 0; i < automata->num_vecinos; i++) {
+        if (automata->vecinos[i] == vecino) {
+            // El vecino ya está registrado, no se añade ni se incrementa el contador
+            return;
+        }
+    }
+
+    // Aumenta el espacio de vecinos y añade el nuevo vecino
+    automata->vecinos = realloc(automata->vecinos, (automata->num_vecinos + 1) * sizeof(Automata *));
+    if (automata->vecinos == NULL) {
+        printf("Error: No se pudo asignar memoria para los vecinos del autómata.\n");
+        return;
+    }
+
+    automata->vecinos[automata->num_vecinos] = vecino;
+    automata->num_vecinos++;
 }
 
 
