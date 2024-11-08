@@ -8,3 +8,4 @@ parser: scanner.l parser.y
 
 clear:
 	rm -f parser lex.yy.c parser.tab.c parser.tab.h intento
+	clear
