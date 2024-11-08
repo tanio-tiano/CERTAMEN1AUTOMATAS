@@ -3,7 +3,7 @@ all: parser
 parser: scanner.l parser.y
 	bison -d parser.y
 	flex scanner.l
-	gcc parser.tab.c lex.yy.c -o intento -lfl
+	gcc parser.tab.c lex.yy.c -o intento -lfl -lm
 	./intento
 
 clear:
