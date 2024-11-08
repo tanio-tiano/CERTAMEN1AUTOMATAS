@@ -12,13 +12,12 @@ int yylex();
 void yyerror(const char *s);
 
 typedef struct CeldaAutomata {
-    int id;  
+    int id;
     int fila, columna;
     int susceptibles, expuestos, infectados, recuperados, fallecidos, vacunados;
     struct CeldaAutomata **vecinos;  // Lista de punteros a vecinos
     int num_vecinos;
 } CeldaAutomata;
-
 // Declaración de la matriz y contador de autómatas
 CeldaAutomata *matriz[MAX_FILAS][MAX_COLUMNAS] = {NULL};
 CeldaAutomata *grupo_por_id[MAX_IDS][MAX_FILAS * MAX_COLUMNAS] = {NULL};
@@ -26,7 +25,7 @@ int tamanio_grupo[MAX_IDS] = {0}; // Contador de celdas en cada grupo de ID
 int posicion_actual_fila = 0;
 int posicion_actual_columna = 0;
 
-// Definir tasas de cambio globales ajustadas para simular COVID-19
+// Definir tasas de cambio globales ajustadas para simular infecciones
 float tasa_infeccion = 0.2;
 float tasa_exposicion = 0.15;
 float tasa_recuperacion = 0.1;
@@ -34,16 +33,19 @@ float tasa_mortalidad = 0.02;
 float tasa_vacunacion = 0.05;
 
 CeldaAutomata* inicializar_automata(int id, int susceptibles, int expuestos, int infectados, int recuperados, int fallecidos, int vacunados);
+void imprimir_matriz();
+
 void imprimir_automata(int id);
 void avanzar_posicion();
 int hay_vecino_con_id(int fila, int columna, int id);
 void conectar_vecinos(CeldaAutomata *celda1, CeldaAutomata *celda2);
-void imprimir_matriz();
-void aislar_vecindad(int id);
+void aislar_celda(int fila, int columna);
 void simular_epidemia(int num_pasos);
+void desaislar_celda(int fila, int columna);
+void imprimir_celda(int fila, int columna);
 %}
 
-%token NUM INICIALIZAR IMPRIMIR_AUTOMATA OTHER PUNTOCOMA SIMULAR AISLAR
+%token NUM INICIALIZAR IMPRIMIR_AUTOMATA IMPRIMIR_CELDA OTHER PUNTOCOMA SIMULAR AISLAR DESAISLAR
 
 %%
 
@@ -59,12 +61,17 @@ statement:
     | IMPRIMIR_AUTOMATA NUM PUNTOCOMA {
         imprimir_automata($2);
     }
-    | AISLAR NUM PUNTOCOMA {
-        aislar_vecindad($2);
+    | AISLAR NUM NUM PUNTOCOMA {
+        aislar_celda($2, $3);
     }
     | SIMULAR NUM PUNTOCOMA {
-        printf("Número de días leído: %d\n", $2);
         simular_epidemia($2);
+    }
+    | DESAISLAR NUM NUM PUNTOCOMA {
+        desaislar_celda($2, $3);
+    }
+    | IMPRIMIR_CELDA NUM NUM PUNTOCOMA {
+        imprimir_celda($2, $3);
     }
     ;
 
@@ -131,6 +138,38 @@ CeldaAutomata* inicializar_automata(int id, int susceptibles, int expuestos, int
             nuevo_automata->fallecidos, nuevo_automata->vacunados);
     return nuevo_automata;
 }
+void imprimir_celda(int fila, int columna) {
+    // Verificar que la fila y columna estén dentro de los límites de la matriz
+    if (fila < 0 || fila >= MAX_FILAS || columna < 0 || columna >= MAX_COLUMNAS) {
+        printf("Error: La posición (%d, %d) está fuera de los límites de la matriz.\n", fila, columna);
+        return;
+    }
+
+    // Obtener la celda de la matriz
+    CeldaAutomata *celda = matriz[fila][columna];
+
+    // Verificar que la celda exista
+    if (celda == NULL) {
+        printf("La celda en la posición (%d, %d) no existe.\n", fila, columna);
+        return;
+    }
+
+    // Imprimir el ID, fila y columna en una línea
+    printf("ID: %d - Posición: (%d, %d)\n", celda->id, fila, columna);
+
+    // Imprimir el resto de los datos en la siguiente línea
+    printf("S: %d, E: %d, I: %d, R: %d, F: %d, V: %d\n",
+           celda->susceptibles, celda->expuestos, celda->infectados,
+           celda->recuperados, celda->fallecidos, celda->vacunados);
+
+    // Imprimir los IDs de los vecinos en la misma línea de los estados
+    printf("Vecinos (IDs): ");
+    for (int i = 0; i < celda->num_vecinos; i++) {
+        printf("%d ", celda->vecinos[i]->id);
+    }
+    printf("\n");
+}
+
 
 void imprimir_automata(int id) {
     printf("Información de las celdas con ID %d:\n", id);
@@ -148,32 +187,87 @@ void imprimir_automata(int id) {
     }
 }
 
-void aislar_vecindad(int id) {
-    for (int i = 0; i < MAX_FILAS; i++) {
-        for (int j = 0; j < MAX_COLUMNAS; j++) {
-            CeldaAutomata *celda = matriz[i][j];
-            if (celda != NULL && celda->id == id) {
-                for (int k = 0; k < celda->num_vecinos; k++) {
-                    CeldaAutomata *vecino = celda->vecinos[k];
-                    if (vecino->id != id) {
-                        for (int m = k; m < celda->num_vecinos - 1; m++) {
-                            celda->vecinos[m] = celda->vecinos[m + 1];
-                        }
-                        celda->num_vecinos--;
-                        celda->vecinos = realloc(celda->vecinos, celda->num_vecinos * sizeof(CeldaAutomata *));
-                        k--;
+void aislar_celda(int fila, int columna) {
+    // Verificar que la celda especificada esté dentro de los límites y exista
+    if (fila < 0 || fila >= MAX_FILAS || columna < 0 || columna >= MAX_COLUMNAS || matriz[fila][columna] == NULL) {
+        printf("Error: La celda en (%d, %d) no es válida o no existe.\n", fila, columna);
+        return;
+    }
+
+    CeldaAutomata *celda = matriz[fila][columna];
+
+    // Desconectar a todos los vecinos de la celda especificada
+    for (int k = 0; k < celda->num_vecinos; k++) {
+        CeldaAutomata *vecino = celda->vecinos[k];
+
+        // Remover la referencia de 'celda' de la lista de vecinos de 'vecino'
+        for (int n = 0; n < vecino->num_vecinos; n++) {
+            if (vecino->vecinos[n] == celda) {
+                // Desplazar los vecinos hacia adelante para eliminar la referencia
+                for (int l = n; l < vecino->num_vecinos - 1; l++) {
+                    vecino->vecinos[l] = vecino->vecinos[l + 1];
+                }
+                vecino->num_vecinos--;
+                vecino->vecinos = realloc(vecino->vecinos, vecino->num_vecinos * sizeof(CeldaAutomata *));
+                break;
+            }
+        }
+    }
+
+    // Limpiar los vecinos de la celda especificada
+    free(celda->vecinos);
+    celda->vecinos = NULL;
+    celda->num_vecinos = 0;
+
+    printf("Celda aislada en la posición (%d, %d).\n", fila, columna);
+}
+
+void desaislar_celda(int fila, int columna) {
+    // Verificar que la celda especificada esté dentro de los límites y exista
+    if (fila < 0 || fila >= MAX_FILAS || columna < 0 || columna >= MAX_COLUMNAS || matriz[fila][columna] == NULL) {
+        printf("Error: La celda en (%d, %d) no es válida o no existe.\n", fila, columna);
+        return;
+    }
+
+    CeldaAutomata *celda = matriz[fila][columna];
+
+    // Definir las direcciones adyacentes (arriba, abajo, izquierda, derecha)
+    int direcciones[4][2] = {{-1, 0}, {1, 0}, {0, -1}, {0, 1}};
+
+    for (int i = 0; i < 4; i++) {
+        int nueva_fila = fila + direcciones[i][0];
+        int nueva_columna = columna + direcciones[i][1];
+
+        // Verificar que el vecino esté dentro de los límites de la matriz
+        if (nueva_fila >= 0 && nueva_fila < MAX_FILAS && nueva_columna >= 0 && nueva_columna < MAX_COLUMNAS) {
+            CeldaAutomata *vecino = matriz[nueva_fila][nueva_columna];
+            if (vecino != NULL) {
+                // Reconectar bidireccionalmente, asegurando que ambos tienen referencias mutuas
+                int already_connected = 0;
+                // Verificar si ya están conectados para evitar duplicados
+                for (int j = 0; j < celda->num_vecinos; j++) {
+                    if (celda->vecinos[j] == vecino) {
+                        already_connected = 1;
+                        break;
                     }
+                }
+                if (!already_connected) {
+                    // Conectar la celda con el vecino y el vecino con la celda
+                    conectar_vecinos(celda, vecino);
                 }
             }
         }
     }
-    printf("Vecindad aislada para celdas con ID %d.\n", id);
+
+    printf("Celda en la posición (%d, %d) ha sido reconectada con sus vecinos.\n", fila, columna);
 }
+
+
 
 void mover_individuos_entre_vecinos(CeldaAutomata *celda) {
     if (celda == NULL || celda->num_vecinos == 0) return;  // Verifica que la celda tenga vecinos
 
-    // Porcentaje de individuos que se moverán (ajustable)
+    // Porcentaje de individuos que se moverán a vecinos
     float porcentaje_movimiento = 0.1;  // 10% de la población se moverá a vecinos
 
     // Mover susceptibles
@@ -211,35 +305,39 @@ void mover_individuos_entre_vecinos(CeldaAutomata *celda) {
         vecino->recuperados += cantidad_mover;
         celda->recuperados -= cantidad_mover;
     }
-
-    // Nota: Puedes ajustar o agregar más compartimentos según sea necesario.
 }
-
 
 void simular_epidemia(int num_pasos) {
     if (num_pasos <= 0) {
         printf("Error: El número de pasos debe ser mayor que cero.\n");
         return;
     }
-    printf("Simulando la epidemia durante %d pasos...\n", num_pasos);
+    
+    // Abre el archivo CSV para escribir los resultados
+    FILE *file = fopen("simulacion.csv", "w");
+    if (file == NULL) {
+        perror("No se pudo abrir simulacion.csv");
+        return;
+    }
+    
+    // Escribe los encabezados del CSV, incluyendo el ID
+    fprintf(file, "Dia,ID,Fila,Columna,Susceptibles,Expuestos,Infectados,Recuperados,Fallecidos,Vacunados\n");
+
+    printf("Simulando la epidemia durante %d días...\n", num_pasos);
     for (int paso = 0; paso < num_pasos; paso++) {
-        printf("\n--- Día %d ---\n", paso + 1);
         for (int i = 0; i < MAX_FILAS; i++) {
             for (int j = 0; j < MAX_COLUMNAS; j++) {
                 CeldaAutomata *celda = matriz[i][j];
                 if (celda != NULL) {
-                    // Generar factor aleatorio para variabilidad
                     float random_factor = ((float) rand() / RAND_MAX);
 
-                    // Proceso de vacunación con aleatoriedad
                     int nuevos_vacunados = celda->susceptibles * tasa_vacunacion * random_factor;
                     celda->susceptibles -= nuevos_vacunados;
                     celda->vacunados += nuevos_vacunados;
 
-                    // Proceso de infección con aleatoriedad
                     int nuevos_infectados = (celda->susceptibles - celda->vacunados) * tasa_infeccion * random_factor;
                     if (celda->vacunados > 0) {
-                        int protegidos = celda->vacunados * 0.8 * random_factor; // Protección aleatoria
+                        int protegidos = celda->vacunados * 0.8 * random_factor;
                         nuevos_infectados -= protegidos;
                         if (nuevos_infectados < 0) nuevos_infectados = 0;
                     }
@@ -259,18 +357,25 @@ void simular_epidemia(int num_pasos) {
                     celda->fallecidos += nuevos_fallecidos;
                     celda->infectados -= nuevos_fallecidos;
 
-                    // Llamada a la función de movimiento entre vecinos
                     mover_individuos_entre_vecinos(celda);
 
-                    // Agregar impresión para mostrar el estado actual de la celda
-                    printf("Posición (%d, %d) - S: %d, E: %d, I: %d, R: %d, F: %d, V: %d\n",
-                           celda->fila, celda->columna, celda->susceptibles, celda->expuestos,
-                           celda->infectados, celda->recuperados, celda->fallecidos, celda->vacunados);
+                    // Escribir el estado de la celda en el archivo CSV, incluyendo el ID
+                    fprintf(file, "%d,%d,%d,%d,%d,%d,%d,%d,%d,%d\n",
+                            paso + 1, celda->id, celda->fila, celda->columna,
+                            celda->susceptibles, celda->expuestos, celda->infectados,
+                            celda->recuperados, celda->fallecidos, celda->vacunados);
+
+                    // Imprimir el estado de la celda en consola
+                   
                 }
             }
         }
     }
-    printf("Simulación de la epidemia completada.\n");
+    
+    // Cierra el archivo CSV después de la simulación
+    fclose(file);
+    
+    printf("Simulación de la epidemia completada y guardada en simulacion.csv.\n");
 }
 
 
@@ -297,7 +402,6 @@ void yyerror(const char *s) {
 int main() {
     // Inicializar semilla aleatoria
     srand(time(NULL));
-
     FILE *file = fopen("comandos.txt", "r");
     if (file == NULL) {
         perror("No se pudo abrir comandos.txt");

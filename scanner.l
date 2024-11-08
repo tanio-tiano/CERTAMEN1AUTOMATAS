@@ -15,6 +15,8 @@ NUM         {DIGIT}+(\.{DIGIT}+)?([eE][-+]?{DIGIT}+)?
 "IMPRIMIR_AUTOMATA"   { return IMPRIMIR_AUTOMATA; }
 "AISLAR"        { return AISLAR; }
 "SIMULAR"       { return SIMULAR; }
+"DESAISLAR"     { return DESAISLAR; }
+"IMPRIMIR_CELDA"    { return IMPRIMIR_CELDA; }
 ";"                 { return PUNTOCOMA; }
 
 "/*"([^*]|(\*+[^*/]))*\*+"/"     { /* Ignorar comentarios de bloque */ }
