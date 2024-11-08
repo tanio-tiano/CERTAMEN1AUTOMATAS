@@ -13,8 +13,8 @@ NUM         {DIGIT}+(\.{DIGIT}+)?([eE][-+]?{DIGIT}+)?
 [0-9]+         { yylval = atoi(yytext); return NUM; }   // Reconoce números y los guarda en yylval
 "INICIALIZAR"       { return INICIALIZAR; }
 "IMPRIMIR_AUTOMATA"   { return IMPRIMIR_AUTOMATA; }
-
-
+"AISLAR"        { return AISLAR; }
+"SIMULAR"       { return SIMULAR; }
 ";"                 { return PUNTOCOMA; }
 
 "/*"([^*]|(\*+[^*/]))*\*+"/"     { /* Ignorar comentarios de bloque */ }
