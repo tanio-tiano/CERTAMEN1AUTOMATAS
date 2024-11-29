@@ -43,9 +43,10 @@ void aislar_celda(int fila, int columna);
 void simular_epidemia(int num_pasos);
 void desaislar_celda(int fila, int columna);
 void imprimir_celda(int fila, int columna);
+void aislar_todas_celdas();
 %}
 
-%token NUM INICIALIZAR IMPRIMIR_AUTOMATA IMPRIMIR_CELDA OTHER PUNTOCOMA SIMULAR AISLAR DESAISLAR
+%token NUM INICIALIZAR IMPRIMIR_AUTOMATA IMPRIMIR_CELDA OTHER PUNTOCOMA SIMULAR AISLAR DESAISLAR AISLAR_TODO
 
 %%
 
@@ -72,6 +73,9 @@ statement:
     }
     | IMPRIMIR_CELDA NUM NUM PUNTOCOMA {
         imprimir_celda($2, $3);
+    }
+    | AISLAR_TODO PUNTOCOMA {
+        aislar_todas_celdas();
     }
     ;
 
@@ -196,7 +200,7 @@ void aislar_celda(int fila, int columna) {
 
     CeldaAutomata *celda = matriz[fila][columna];
 
-    // Desconectar a todos los vecinos de la celda especificada
+    // Desconectar a todos los vecinos de la celda especificada sin hacer realloc en cada iteración
     for (int k = 0; k < celda->num_vecinos; k++) {
         CeldaAutomata *vecino = celda->vecinos[k];
 
@@ -204,9 +208,7 @@ void aislar_celda(int fila, int columna) {
         for (int n = 0; n < vecino->num_vecinos; n++) {
             if (vecino->vecinos[n] == celda) {
                 // Desplazar los vecinos hacia adelante para eliminar la referencia
-                for (int l = n; l < vecino->num_vecinos - 1; l++) {
-                    vecino->vecinos[l] = vecino->vecinos[l + 1];
-                }
+                vecino->vecinos[n] = vecino->vecinos[vecino->num_vecinos - 1];
                 vecino->num_vecinos--;
                 vecino->vecinos = realloc(vecino->vecinos, vecino->num_vecinos * sizeof(CeldaAutomata *));
                 break;
@@ -214,13 +216,14 @@ void aislar_celda(int fila, int columna) {
         }
     }
 
-    // Limpiar los vecinos de la celda especificada
+    // Limpiar los vecinos de la celda especificada sin hacer realloc cada vez
     free(celda->vecinos);
     celda->vecinos = NULL;
     celda->num_vecinos = 0;
 
     printf("Celda aislada en la posición (%d, %d).\n", fila, columna);
 }
+
 
 void desaislar_celda(int fila, int columna) {
     // Verificar que la celda especificada esté dentro de los límites y exista
@@ -395,19 +398,29 @@ void imprimir_matriz() {
     printf("\n");
 }
 
+
+void aislar_todas_celdas() {
+    for (int i = 0; i < MAX_FILAS; i++) {
+        for (int j = 0; j < MAX_COLUMNAS; j++) {
+            if (matriz[i][j] != NULL) {
+                aislar_celda(i, j);
+            }
+        }
+    }
+}
+
 void yyerror(const char *s) {
     fprintf(stderr, "Error: %s\n", s);
 }
 
 int main() {
-    // Inicializar semilla aleatoria
+
     srand(time(NULL));
     FILE *file = fopen("comandos.txt", "r");
     if (file == NULL) {
         perror("No se pudo abrir comandos.txt");
         return 1;
     }
-    printf("Ingrese 'INICIALIZAR S I R F V;' donde S,I,R,V,F la inicial de cada estado\n");
     stdin = file;
     yyparse();
     fclose(file);
